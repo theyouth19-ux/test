@@ -25,7 +25,8 @@ class RecordingManager @Inject constructor(
         currentFilePath = file.absolutePath
 
         recorder = createMediaRecorder().apply {
-            setAudioSource(MediaRecorder.AudioSource.MIC)
+            // VOICE_COMMUNICATION을 사용하여 SpeechRecognizer와 마이크 공유 가능
+            setAudioSource(MediaRecorder.AudioSource.VOICE_COMMUNICATION)
             setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
             setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
             setAudioEncodingBitRate(128_000)
@@ -49,7 +50,6 @@ class RecordingManager @Inject constructor(
         } catch (e: RuntimeException) {
             recorder?.release()
             recorder = null
-            // 녹음이 너무 짧은 경우 파일 정리
             currentFilePath?.let { File(it).delete() }
             null
         }
