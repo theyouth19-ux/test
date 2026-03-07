@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import com.voicediary.app.data.local.VoiceDiaryDatabase
 import com.voicediary.app.data.local.VoiceEntryDao
+import com.voicediary.app.data.recording.RecordingManager
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -29,5 +30,10 @@ object AppModule {
     @Singleton
     fun provideVoiceEntryDao(database: VoiceDiaryDatabase): VoiceEntryDao {
         return database.voiceEntryDao()
+    }
+
+    @Provides
+    fun provideRecordingManager(@ApplicationContext context: Context): RecordingManager {
+        return RecordingManager(context)
     }
 }
