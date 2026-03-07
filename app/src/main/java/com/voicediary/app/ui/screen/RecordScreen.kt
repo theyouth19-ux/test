@@ -1,11 +1,14 @@
 package com.voicediary.app.ui.screen
 
 import android.Manifest
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -27,8 +30,11 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.UnfoldLess
+import androidx.compose.material.icons.filled.UnfoldMore
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
@@ -37,6 +43,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -106,13 +113,11 @@ fun RecordScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding),
-                isRecording = uiState.isRecording,
-                elapsedSeconds = uiState.elapsedSeconds,
-                hasRecording = uiState.filePath != null && !uiState.isRecording,
-                partialTranscript = uiState.partialTranscript,
+                uiState = uiState,
                 onStartRecording = viewModel::startRecording,
                 onStopRecording = viewModel::stopRecording,
-                onSave = viewModel::saveEntry
+                onSave = viewModel::saveEntry,
+                onToggleRaw = viewModel::toggleShowRawTranscript
             )
         }
     }
@@ -153,13 +158,11 @@ private fun PermissionRequestContent(
 @Composable
 private fun RecordingContent(
     modifier: Modifier = Modifier,
-    isRecording: Boolean,
-    elapsedSeconds: Long,
-    hasRecording: Boolean,
-    partialTranscript: String,
+    uiState: RecordUiState,
     onStartRecording: () -> Unit,
     onStopRecording: () -> Unit,
-    onSave: () -> Unit
+    onSave: () -> Unit,
+    onToggleRaw: () -> Unit
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "blink")
     val blinkAlpha by infiniteTransition.animateFloat(
@@ -172,6 +175,8 @@ private fun RecordingContent(
         label = "blinkAlpha"
     )
 
+    val hasRecording = uiState.filePath != null && !uiState.isRecording
+
     Column(
         modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally
@@ -179,7 +184,7 @@ private fun RecordingContent(
         Spacer(modifier = Modifier.height(32.dp))
 
         // 녹음 상태 표시
-        if (isRecording) {
+        if (uiState.isRecording) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     modifier = Modifier
@@ -198,7 +203,11 @@ private fun RecordingContent(
             }
         } else {
             Text(
-                text = if (hasRecording) "녹음 완료" else "준비됨",
+                text = when {
+                    uiState.correctionState == CorrectionState.CORRECTING -> "AI 교정 중..."
+                    hasRecording -> "녹음 완료"
+                    else -> "준비됨"
+                },
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -208,47 +217,56 @@ private fun RecordingContent(
 
         // 타이머
         Text(
-            text = formatElapsedTime(elapsedSeconds),
+            text = formatElapsedTime(uiState.elapsedSeconds),
             fontSize = 56.sp,
             fontWeight = FontWeight.Light,
-            color = if (isRecording) MaterialTheme.colorScheme.primary
+            color = if (uiState.isRecording) MaterialTheme.colorScheme.primary
             else MaterialTheme.colorScheme.onSurface,
             letterSpacing = 2.sp
         )
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        // 녹음 시작/정지 버튼
-        if (isRecording) {
-            Button(
-                onClick = onStopRecording,
-                modifier = Modifier.size(80.dp),
-                shape = CircleShape,
-                colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Stop,
-                    contentDescription = "녹음 정지",
-                    modifier = Modifier.size(40.dp),
-                    tint = Color.White
+        // 녹음/정지 버튼 + 교정 중 로딩
+        when {
+            uiState.correctionState == CorrectionState.CORRECTING -> {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(80.dp),
+                    strokeWidth = 4.dp
                 )
             }
-        } else {
-            Button(
-                onClick = onStartRecording,
-                modifier = Modifier.size(80.dp),
-                shape = CircleShape
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Mic,
-                    contentDescription = "녹음 시작",
-                    modifier = Modifier.size(40.dp)
-                )
+            uiState.isRecording -> {
+                Button(
+                    onClick = onStopRecording,
+                    modifier = Modifier.size(80.dp),
+                    shape = CircleShape,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Stop,
+                        contentDescription = "녹음 정지",
+                        modifier = Modifier.size(40.dp),
+                        tint = Color.White
+                    )
+                }
+            }
+            else -> {
+                Button(
+                    onClick = onStartRecording,
+                    modifier = Modifier.size(80.dp),
+                    shape = CircleShape
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Mic,
+                        contentDescription = "녹음 시작",
+                        modifier = Modifier.size(40.dp)
+                    )
+                }
             }
         }
 
-        // 저장 버튼
-        if (hasRecording) {
+        // 교정 완료 후 저장 버튼
+        if (hasRecording && uiState.correctionState == CorrectionState.DONE) {
             Spacer(modifier = Modifier.height(24.dp))
             FilledTonalButton(onClick = onSave) {
                 Icon(
@@ -261,12 +279,12 @@ private fun RecordingContent(
             }
         }
 
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
-        // 실시간 텍스트 표시 영역
-        TranscriptPanel(
-            transcript = partialTranscript,
-            isRecording = isRecording,
+        // 텍스트 패널 영역
+        TranscriptSection(
+            uiState = uiState,
+            onToggleRaw = onToggleRaw,
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
@@ -276,15 +294,21 @@ private fun RecordingContent(
 }
 
 @Composable
-private fun TranscriptPanel(
-    transcript: String,
-    isRecording: Boolean,
+private fun TranscriptSection(
+    uiState: RecordUiState,
+    onToggleRaw: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
 
-    // 텍스트가 변경될 때 자동 스크롤
-    LaunchedEffect(transcript) {
+    val displayText = when {
+        uiState.isRecording -> uiState.partialTranscript
+        uiState.correctionState == CorrectionState.DONE && !uiState.showRawTranscript -> uiState.correctedText
+        uiState.correctionState == CorrectionState.DONE && uiState.showRawTranscript -> uiState.rawTranscript
+        else -> uiState.partialTranscript
+    }
+
+    LaunchedEffect(displayText) {
         scrollState.animateScrollTo(scrollState.maxValue)
     }
 
@@ -295,32 +319,80 @@ private fun TranscriptPanel(
         tonalElevation = 1.dp
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = "음성 인식 텍스트",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(scrollState)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                if (transcript.isBlank()) {
-                    Text(
-                        text = if (isRecording) "음성을 인식하고 있습니다..." else "녹음을 시작하면 여기에 텍스트가 표시됩니다.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                } else {
-                    Text(
-                        text = transcript,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        lineHeight = 28.sp
-                    )
+                Text(
+                    text = when {
+                        uiState.correctionState == CorrectionState.DONE && uiState.showRawTranscript -> "원본 텍스트"
+                        uiState.correctionState == CorrectionState.DONE -> "교정된 텍스트"
+                        uiState.correctionState == CorrectionState.CORRECTING -> "AI 교정 중..."
+                        else -> "음성 인식 텍스트"
+                    },
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                // 교정 완료 후 원본/교정 토글 버튼
+                if (uiState.correctionState == CorrectionState.DONE && uiState.rawTranscript != uiState.correctedText) {
+                    TextButton(onClick = onToggleRaw) {
+                        Icon(
+                            imageVector = if (uiState.showRawTranscript) Icons.Filled.UnfoldLess else Icons.Filled.UnfoldMore,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = if (uiState.showRawTranscript) "교정본 보기" else "원본 보기",
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // 교정 중 로딩 표시
+            if (uiState.correctionState == CorrectionState.CORRECTING) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        CircularProgressIndicator(modifier = Modifier.size(32.dp))
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = "AI가 텍스트를 교정하고 있습니다...",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(scrollState)
+                ) {
+                    if (displayText.isBlank()) {
+                        Text(
+                            text = if (uiState.isRecording) "음성을 인식하고 있습니다..."
+                            else "녹음을 시작하면 여기에 텍스트가 표시됩니다.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    } else {
+                        Text(
+                            text = displayText,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            lineHeight = 28.sp
+                        )
+                    }
                 }
             }
         }

@@ -6,6 +6,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.voicediary.app.data.local.VoiceEntry
+import com.voicediary.app.data.network.TextCorrectionService
 import com.voicediary.app.data.recording.RecordingManager
 import com.voicediary.app.data.recording.SpeechRecognitionManager
 import com.voicediary.app.data.repository.VoiceEntryRepository
@@ -19,13 +20,22 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+enum class CorrectionState {
+    IDLE,
+    CORRECTING,
+    DONE
+}
+
 data class RecordUiState(
     val isRecording: Boolean = false,
     val elapsedSeconds: Long = 0L,
     val filePath: String? = null,
     val isSaved: Boolean = false,
     val partialTranscript: String = "",
-    val rawTranscript: String = ""
+    val rawTranscript: String = "",
+    val correctedText: String = "",
+    val correctionState: CorrectionState = CorrectionState.IDLE,
+    val showRawTranscript: Boolean = false
 )
 
 @HiltViewModel
@@ -33,6 +43,7 @@ class RecordViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val recordingManager: RecordingManager,
     private val speechRecognitionManager: SpeechRecognitionManager,
+    private val textCorrectionService: TextCorrectionService,
     private val repository: VoiceEntryRepository
 ) : ViewModel() {
 
@@ -59,7 +70,6 @@ class RecordViewModel @Inject constructor(
     }
 
     fun startRecording() {
-        // 1) MediaRecorder 먼저 시작 (VOICE_COMMUNICATION 소스)
         val path = recordingManager.startRecording(type)
         _uiState.value = RecordUiState(
             isRecording = true,
@@ -68,7 +78,6 @@ class RecordViewModel @Inject constructor(
         )
         startTimer()
 
-        // 2) 약간의 지연 후 SpeechRecognizer 시작 (마이크 안정화)
         mainHandler.postDelayed({
             if (_uiState.value.isRecording) {
                 speechRecognitionManager.startListening()
@@ -77,21 +86,35 @@ class RecordViewModel @Inject constructor(
     }
 
     fun stopRecording() {
-        // 1) SpeechRecognizer 먼저 정지 → 최종 텍스트 수집
         val finalTranscript = speechRecognitionManager.stopListening()
-
-        // 2) 타이머 정지
         timerJob?.cancel()
-
-        // 3) MediaRecorder 정지
         val path = recordingManager.stopRecording()
 
         _uiState.update { it.copy(
             isRecording = false,
             filePath = path,
             rawTranscript = finalTranscript.ifBlank { it.rawTranscript },
-            partialTranscript = finalTranscript.ifBlank { it.partialTranscript }
+            partialTranscript = finalTranscript.ifBlank { it.partialTranscript },
+            correctionState = CorrectionState.CORRECTING
         ) }
+
+        // 녹음 종료 후 자동으로 AI 교정 시작
+        requestCorrection()
+    }
+
+    private fun requestCorrection() {
+        viewModelScope.launch {
+            val raw = _uiState.value.rawTranscript
+            val result = textCorrectionService.correctText(raw)
+            _uiState.update { it.copy(
+                correctedText = result.correctedText,
+                correctionState = CorrectionState.DONE
+            ) }
+        }
+    }
+
+    fun toggleShowRawTranscript() {
+        _uiState.update { it.copy(showRawTranscript = !it.showRawTranscript) }
     }
 
     fun saveEntry() {
@@ -102,7 +125,7 @@ class RecordViewModel @Inject constructor(
             val entry = VoiceEntry(
                 type = type,
                 rawTranscript = state.rawTranscript,
-                correctedText = state.rawTranscript, // 일단 rawTranscript를 복사 (추후 AI 교정)
+                correctedText = state.correctedText.ifBlank { state.rawTranscript },
                 audioFilePath = path,
                 createdAt = System.currentTimeMillis(),
                 reviewStatus = "unreviewed"
