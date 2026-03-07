@@ -88,6 +88,11 @@ fun VoiceDiaryNavHost() {
                 onNavigateBack = { navController.popBackStack() },
                 onNavigateToDetail = { id ->
                     navController.navigate(NavRoutes.detail(id))
+                },
+                onNavigateToRecord = {
+                    navController.navigate(NavRoutes.HOME) {
+                        popUpTo(NavRoutes.HOME) { inclusive = true }
+                    }
                 }
             )
         }
