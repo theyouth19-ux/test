@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.voicediary.app.data.local.VoiceEntry
 import com.voicediary.app.data.network.TextCorrectionService
+import com.voicediary.app.data.recording.AudioPlayerManager
 import com.voicediary.app.data.recording.RecordingManager
 import com.voicediary.app.data.recording.SpeechRecognitionManager
 import com.voicediary.app.data.repository.VoiceEntryRepository
@@ -35,7 +36,8 @@ data class RecordUiState(
     val rawTranscript: String = "",
     val correctedText: String = "",
     val correctionState: CorrectionState = CorrectionState.IDLE,
-    val showRawTranscript: Boolean = false
+    val createdAt: Long = System.currentTimeMillis(),
+    val isPlaying: Boolean = false
 )
 
 @HiltViewModel
@@ -44,6 +46,7 @@ class RecordViewModel @Inject constructor(
     private val recordingManager: RecordingManager,
     private val speechRecognitionManager: SpeechRecognitionManager,
     private val textCorrectionService: TextCorrectionService,
+    private val audioPlayerManager: AudioPlayerManager,
     private val repository: VoiceEntryRepository
 ) : ViewModel() {
 
@@ -74,7 +77,8 @@ class RecordViewModel @Inject constructor(
         _uiState.value = RecordUiState(
             isRecording = true,
             elapsedSeconds = 0L,
-            filePath = path
+            filePath = path,
+            createdAt = System.currentTimeMillis()
         )
         startTimer()
 
@@ -98,7 +102,6 @@ class RecordViewModel @Inject constructor(
             correctionState = CorrectionState.CORRECTING
         ) }
 
-        // 녹음 종료 후 자동으로 AI 교정 시작
         requestCorrection()
     }
 
@@ -113,8 +116,21 @@ class RecordViewModel @Inject constructor(
         }
     }
 
-    fun toggleShowRawTranscript() {
-        _uiState.update { it.copy(showRawTranscript = !it.showRawTranscript) }
+    fun updateCorrectedText(text: String) {
+        _uiState.update { it.copy(correctedText = text) }
+    }
+
+    fun playAudio() {
+        val path = _uiState.value.filePath ?: return
+        _uiState.update { it.copy(isPlaying = true) }
+        audioPlayerManager.play(path) {
+            _uiState.update { it.copy(isPlaying = false) }
+        }
+    }
+
+    fun stopPlayback() {
+        audioPlayerManager.stop()
+        _uiState.update { it.copy(isPlaying = false) }
     }
 
     fun saveEntry() {
@@ -127,7 +143,7 @@ class RecordViewModel @Inject constructor(
                 rawTranscript = state.rawTranscript,
                 correctedText = state.correctedText.ifBlank { state.rawTranscript },
                 audioFilePath = path,
-                createdAt = System.currentTimeMillis(),
+                createdAt = state.createdAt,
                 reviewStatus = "unreviewed"
             )
             repository.insert(entry)
@@ -148,6 +164,7 @@ class RecordViewModel @Inject constructor(
         super.onCleared()
         speechRecognitionManager.release()
         recordingManager.release()
+        audioPlayerManager.release()
         mainHandler.removeCallbacksAndMessages(null)
     }
 }

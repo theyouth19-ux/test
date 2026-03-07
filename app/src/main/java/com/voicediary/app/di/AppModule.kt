@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import com.voicediary.app.data.local.VoiceDiaryDatabase
 import com.voicediary.app.data.local.VoiceEntryDao
+import com.voicediary.app.data.recording.AudioPlayerManager
 import com.voicediary.app.data.recording.RecordingManager
 import com.voicediary.app.data.recording.SpeechRecognitionManager
 import dagger.Module
@@ -41,5 +42,10 @@ object AppModule {
     @Provides
     fun provideSpeechRecognitionManager(@ApplicationContext context: Context): SpeechRecognitionManager {
         return SpeechRecognitionManager(context)
+    }
+
+    @Provides
+    fun provideAudioPlayerManager(): AudioPlayerManager {
+        return AudioPlayerManager()
     }
 }
