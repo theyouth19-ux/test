@@ -4,10 +4,10 @@ import androidx.room.Database
 import androidx.room.RoomDatabase
 
 @Database(
-    entities = [DiaryEntry::class],
+    entities = [VoiceEntry::class],
     version = 1,
     exportSchema = false
 )
 abstract class VoiceDiaryDatabase : RoomDatabase() {
-    abstract fun diaryDao(): DiaryDao
+    abstract fun voiceEntryDao(): VoiceEntryDao
 }

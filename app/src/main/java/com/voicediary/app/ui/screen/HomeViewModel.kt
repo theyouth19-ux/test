@@ -2,8 +2,8 @@ package com.voicediary.app.ui.screen
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.voicediary.app.data.local.DiaryEntry
-import com.voicediary.app.data.repository.DiaryRepository
+import com.voicediary.app.data.local.VoiceEntry
+import com.voicediary.app.data.repository.VoiceEntryRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -13,19 +13,19 @@ import javax.inject.Inject
 
 @HiltViewModel
 class HomeViewModel @Inject constructor(
-    private val repository: DiaryRepository
+    private val repository: VoiceEntryRepository
 ) : ViewModel() {
 
-    val entries: StateFlow<List<DiaryEntry>> = repository.getAllEntries()
+    val entries: StateFlow<List<VoiceEntry>> = repository.getAllEntries()
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
             initialValue = emptyList()
         )
 
-    fun deleteEntry(entry: DiaryEntry) {
+    fun deleteEntry(entry: VoiceEntry) {
         viewModelScope.launch {
-            repository.deleteEntry(entry)
+            repository.delete(entry)
         }
     }
 }

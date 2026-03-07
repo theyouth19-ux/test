@@ -2,8 +2,8 @@ package com.voicediary.app.di
 
 import android.content.Context
 import androidx.room.Room
-import com.voicediary.app.data.local.DiaryDao
 import com.voicediary.app.data.local.VoiceDiaryDatabase
+import com.voicediary.app.data.local.VoiceEntryDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -27,7 +27,7 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideDiaryDao(database: VoiceDiaryDatabase): DiaryDao {
-        return database.diaryDao()
+    fun provideVoiceEntryDao(database: VoiceDiaryDatabase): VoiceEntryDao {
+        return database.voiceEntryDao()
     }
 }
