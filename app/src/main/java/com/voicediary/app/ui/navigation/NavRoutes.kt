@@ -1,6 +1,7 @@
 package com.voicediary.app.ui.navigation
 
 object NavRoutes {
+    const val SPLASH = "splash"
     const val HOME = "home"
     const val RECORD = "record/{type}"
     const val RESULT = "result/{type}"

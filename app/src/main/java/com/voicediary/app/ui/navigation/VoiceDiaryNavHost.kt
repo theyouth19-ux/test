@@ -14,6 +14,7 @@ import com.voicediary.app.ui.screen.ListScreen
 import com.voicediary.app.ui.screen.RecordScreen
 import com.voicediary.app.ui.screen.RecordViewModel
 import com.voicediary.app.ui.screen.ResultScreen
+import com.voicediary.app.ui.screen.SplashScreen
 
 @Composable
 fun VoiceDiaryNavHost() {
@@ -21,8 +22,18 @@ fun VoiceDiaryNavHost() {
 
     NavHost(
         navController = navController,
-        startDestination = NavRoutes.HOME
+        startDestination = NavRoutes.SPLASH
     ) {
+        composable(NavRoutes.SPLASH) {
+            SplashScreen(
+                onSplashFinished = {
+                    navController.navigate(NavRoutes.HOME) {
+                        popUpTo(NavRoutes.SPLASH) { inclusive = true }
+                    }
+                }
+            )
+        }
+
         composable(NavRoutes.HOME) {
             HomeScreen(
                 onNavigateToRecord = { type ->

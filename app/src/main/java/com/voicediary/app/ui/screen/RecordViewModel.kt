@@ -32,10 +32,12 @@ data class RecordUiState(
     val elapsedSeconds: Long = 0L,
     val filePath: String? = null,
     val isSaved: Boolean = false,
+    val saveFailed: Boolean = false,
     val partialTranscript: String = "",
     val rawTranscript: String = "",
     val correctedText: String = "",
     val correctionState: CorrectionState = CorrectionState.IDLE,
+    val correctionSkipped: Boolean = false,
     val createdAt: Long = System.currentTimeMillis(),
     val isPlaying: Boolean = false
 )
@@ -111,7 +113,8 @@ class RecordViewModel @Inject constructor(
             val result = textCorrectionService.correctText(raw)
             _uiState.update { it.copy(
                 correctedText = result.correctedText,
-                correctionState = CorrectionState.DONE
+                correctionState = CorrectionState.DONE,
+                correctionSkipped = result.isOriginal && raw.isNotBlank()
             ) }
         }
     }
@@ -138,16 +141,20 @@ class RecordViewModel @Inject constructor(
         val path = state.filePath ?: return
 
         viewModelScope.launch {
-            val entry = VoiceEntry(
-                type = type,
-                rawTranscript = state.rawTranscript,
-                correctedText = state.correctedText.ifBlank { state.rawTranscript },
-                audioFilePath = path,
-                createdAt = state.createdAt,
-                reviewStatus = "unreviewed"
-            )
-            repository.insert(entry)
-            _uiState.update { it.copy(isSaved = true) }
+            try {
+                val entry = VoiceEntry(
+                    type = type,
+                    rawTranscript = state.rawTranscript,
+                    correctedText = state.correctedText.ifBlank { state.rawTranscript },
+                    audioFilePath = path,
+                    createdAt = state.createdAt,
+                    reviewStatus = "unreviewed"
+                )
+                repository.insert(entry)
+                _uiState.update { it.copy(isSaved = true, saveFailed = false) }
+            } catch (_: Exception) {
+                _uiState.update { it.copy(saveFailed = true) }
+            }
         }
     }
 

@@ -1,6 +1,9 @@
 package com.voicediary.app.ui.screen
 
 import android.Manifest
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -25,6 +28,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -34,17 +38,23 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -66,13 +76,25 @@ fun RecordScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val title = if (type == "diary") "일기 녹음" else "메모 녹음"
+    val context = LocalContext.current
 
     val micPermissionState = rememberPermissionState(Manifest.permission.RECORD_AUDIO)
+    val snackbarHostState = remember { SnackbarHostState() }
 
     // 교정 완료 시 결과 화면으로 자동 이동
     LaunchedEffect(uiState.correctionState) {
         if (uiState.correctionState == CorrectionState.DONE) {
             onNavigateToResult()
+        }
+    }
+
+    // 네트워크 오류로 AI 교정 건너뜀 안내
+    LaunchedEffect(uiState.correctionSkipped) {
+        if (uiState.correctionSkipped) {
+            snackbarHostState.showSnackbar(
+                message = "네트워크 연결 없음 — AI 교정을 건너뛰었습니다",
+                duration = SnackbarDuration.Short
+            )
         }
     }
 
@@ -89,7 +111,8 @@ fun RecordScreen(
                     }
                 }
             )
-        }
+        },
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
     ) { padding ->
         if (!micPermissionState.status.isGranted) {
             Column(
@@ -101,7 +124,15 @@ fun RecordScreen(
             ) {
                 PermissionRequestContent(
                     shouldShowRationale = micPermissionState.status.shouldShowRationale,
-                    onRequestPermission = { micPermissionState.launchPermissionRequest() }
+                    onRequestPermission = { micPermissionState.launchPermissionRequest() },
+                    onOpenSettings = {
+                        context.startActivity(
+                            Intent(
+                                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                Uri.fromParts("package", context.packageName, null)
+                            )
+                        )
+                    }
                 )
             }
         } else {
@@ -120,11 +151,13 @@ fun RecordScreen(
 @Composable
 private fun PermissionRequestContent(
     shouldShowRationale: Boolean,
-    onRequestPermission: () -> Unit
+    onRequestPermission: () -> Unit,
+    onOpenSettings: () -> Unit
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+        verticalArrangement = Arrangement.Center,
+        modifier = Modifier.padding(horizontal = 32.dp)
     ) {
         Icon(
             imageVector = Icons.Filled.Mic,
@@ -135,16 +168,29 @@ private fun PermissionRequestContent(
         Spacer(modifier = Modifier.height(16.dp))
         Text(
             text = if (shouldShowRationale) {
-                "음성 녹음을 위해 마이크 권한이 필요합니다."
+                "음성 녹음을 위해 마이크 권한이 필요합니다.\n설정에서 권한을 허용해주세요."
             } else {
                 "녹음을 시작하려면 마이크 권한을 허용해주세요."
             },
             style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
         )
         Spacer(modifier = Modifier.height(24.dp))
-        Button(onClick = onRequestPermission) {
-            Text("권한 허용하기")
+        if (shouldShowRationale) {
+            Button(onClick = onOpenSettings) {
+                Icon(
+                    imageVector = Icons.Filled.Settings,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("설정으로 이동")
+            }
+        } else {
+            Button(onClick = onRequestPermission) {
+                Text("권한 허용하기")
+            }
         }
     }
 }
