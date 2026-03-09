@@ -7,10 +7,15 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.voicediary.app.data.local.VoiceEntry
 import com.voicediary.app.data.network.TextCorrectionService
+import com.voicediary.app.data.network.WhisperService
 import com.voicediary.app.data.recording.AudioPlayerManager
 import com.voicediary.app.data.recording.RecordingManager
 import com.voicediary.app.data.recording.SpeechRecognitionManager
 import com.voicediary.app.data.repository.VoiceEntryRepository
+import com.voicediary.app.data.settings.AppSettings
+import com.voicediary.app.data.settings.SttEngine
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -49,7 +54,9 @@ class RecordViewModel @Inject constructor(
     private val speechRecognitionManager: SpeechRecognitionManager,
     private val textCorrectionService: TextCorrectionService,
     private val audioPlayerManager: AudioPlayerManager,
-    private val repository: VoiceEntryRepository
+    private val repository: VoiceEntryRepository,
+    private val whisperService: WhisperService,
+    private val appSettings: AppSettings
 ) : ViewModel() {
 
     val type: String = savedStateHandle["type"] ?: "diary"
@@ -104,7 +111,27 @@ class RecordViewModel @Inject constructor(
             correctionState = CorrectionState.CORRECTING
         ) }
 
-        requestCorrection()
+        if (appSettings.sttEngine.value == SttEngine.WHISPER && path != null) {
+            requestWhisperThenCorrection(path)
+        } else {
+            requestCorrection()
+        }
+    }
+
+    private fun requestWhisperThenCorrection(audioPath: String) {
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                whisperService.transcribe(audioPath)
+            }
+            if (result != null) {
+                _uiState.update { it.copy(
+                    rawTranscript = result.text,
+                    partialTranscript = result.text
+                ) }
+            }
+            // Whisper 결과(또는 기기 STT fallback)로 교정 진행
+            requestCorrection()
+        }
     }
 
     private fun requestCorrection() {

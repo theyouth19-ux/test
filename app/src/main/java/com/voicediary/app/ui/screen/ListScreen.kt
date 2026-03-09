@@ -20,6 +20,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -30,6 +32,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -43,8 +46,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -64,9 +70,9 @@ fun ListScreen(
 ) {
     val entries by viewModel.entries.collectAsStateWithLifecycle()
     val currentFilter by viewModel.currentFilter.collectAsStateWithLifecycle()
+    val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     var entryToDelete by remember { mutableStateOf<VoiceEntry?>(null) }
 
-    // 삭제 확인 다이얼로그
     entryToDelete?.let { entry ->
         DeleteConfirmDialog(
             onConfirm = {
@@ -97,25 +103,74 @@ fun ListScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            // 필터 칩 행
-            FilterChipRow(
-                currentFilter = currentFilter,
-                onFilterSelected = viewModel::setFilter
+            // 검색 바
+            SearchBar(
+                query = searchQuery,
+                onQueryChange = viewModel::setSearchQuery
             )
 
+            // 필터 칩 (검색 중이 아닐 때만)
+            if (searchQuery.isBlank()) {
+                FilterChipRow(
+                    currentFilter = currentFilter,
+                    onFilterSelected = viewModel::setFilter
+                )
+            }
+
             if (entries.isEmpty()) {
-                // 빈 목록 안내
-                EmptyListContent(onNavigateToRecord = onNavigateToRecord)
+                if (searchQuery.isNotBlank()) {
+                    // 검색 결과 없음
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = "\"$searchQuery\"에 대한 검색 결과가 없습니다",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                } else {
+                    EmptyListContent(onNavigateToRecord = onNavigateToRecord)
+                }
             } else {
-                // 날짜별 그룹핑된 목록
                 GroupedEntryList(
                     entries = entries,
+                    searchQuery = searchQuery,
                     onEntryClick = { onNavigateToDetail(it.id) },
                     onEntryLongClick = { entryToDelete = it }
                 )
             }
         }
     }
+}
+
+@Composable
+private fun SearchBar(
+    query: String,
+    onQueryChange: (String) -> Unit
+) {
+    OutlinedTextField(
+        value = query,
+        onValueChange = onQueryChange,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        placeholder = { Text("기록 검색...") },
+        leadingIcon = {
+            Icon(imageVector = Icons.Filled.Search, contentDescription = "검색")
+        },
+        trailingIcon = {
+            if (query.isNotBlank()) {
+                IconButton(onClick = { onQueryChange("") }) {
+                    Icon(imageVector = Icons.Filled.Clear, contentDescription = "지우기")
+                }
+            }
+        },
+        singleLine = true,
+        shape = RoundedCornerShape(12.dp)
+    )
 }
 
 @Composable
@@ -126,7 +181,7 @@ private fun FilterChipRow(
     LazyRow(
         contentPadding = PaddingValues(horizontal = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
-        modifier = Modifier.padding(vertical = 8.dp)
+        modifier = Modifier.padding(vertical = 4.dp)
     ) {
         items(ListFilter.entries) { filter ->
             FilterChip(
@@ -172,10 +227,10 @@ private fun EmptyListContent(onNavigateToRecord: () -> Unit) {
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun GroupedEntryList(
     entries: List<VoiceEntry>,
+    searchQuery: String,
     onEntryClick: (VoiceEntry) -> Unit,
     onEntryLongClick: (VoiceEntry) -> Unit
 ) {
@@ -192,6 +247,7 @@ private fun GroupedEntryList(
             items(entriesForDate, key = { it.id }) { entry ->
                 VoiceEntryCard(
                     entry = entry,
+                    searchQuery = searchQuery,
                     onClick = { onEntryClick(entry) },
                     onLongClick = { onEntryLongClick(entry) }
                 )
@@ -215,6 +271,7 @@ private fun DateHeader(dateText: String) {
 @Composable
 private fun VoiceEntryCard(
     entry: VoiceEntry,
+    searchQuery: String,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -248,18 +305,16 @@ private fun VoiceEntryCard(
                         fontWeight = FontWeight.SemiBold
                     )
                 }
-
                 ReviewStatusBadge(status = entry.reviewStatus)
             }
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            Text(
+            // 검색어 하이라이트가 적용된 텍스트
+            HighlightedText(
                 text = entry.correctedText.ifBlank { "(텍스트 없음)" },
-                style = MaterialTheme.typography.bodyMedium,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                color = MaterialTheme.colorScheme.onSurface
+                highlight = searchQuery,
+                maxLines = 2
             )
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -271,6 +326,58 @@ private fun VoiceEntryCard(
             )
         }
     }
+}
+
+@Composable
+private fun HighlightedText(
+    text: String,
+    highlight: String,
+    maxLines: Int = Int.MAX_VALUE
+) {
+    if (highlight.isBlank()) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyMedium,
+            maxLines = maxLines,
+            overflow = TextOverflow.Ellipsis,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        return
+    }
+
+    val annotatedString = buildAnnotatedString {
+        var start = 0
+        val lowerText = text.lowercase()
+        val lowerHighlight = highlight.lowercase()
+
+        while (start < text.length) {
+            val index = lowerText.indexOf(lowerHighlight, start)
+            if (index == -1) {
+                append(text.substring(start))
+                break
+            }
+            // 매칭 전 텍스트
+            append(text.substring(start, index))
+            // 하이라이트
+            withStyle(
+                SpanStyle(
+                    background = Color(0xFFFFEB3B),
+                    fontWeight = FontWeight.SemiBold
+                )
+            ) {
+                append(text.substring(index, index + highlight.length))
+            }
+            start = index + highlight.length
+        }
+    }
+
+    Text(
+        text = annotatedString,
+        style = MaterialTheme.typography.bodyMedium,
+        maxLines = maxLines,
+        overflow = TextOverflow.Ellipsis,
+        color = MaterialTheme.colorScheme.onSurface
+    )
 }
 
 @Composable
@@ -323,7 +430,6 @@ private fun groupByDate(entries: List<VoiceEntry>): List<Pair<String, List<Voice
     return entries
         .groupBy { entry ->
             calendar.timeInMillis = entry.createdAt
-            // 날짜 부분만으로 그룹핑 (시간 제거)
             calendar.set(Calendar.HOUR_OF_DAY, 0)
             calendar.set(Calendar.MINUTE, 0)
             calendar.set(Calendar.SECOND, 0)

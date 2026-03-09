@@ -14,16 +14,21 @@ import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        // 위젯에서 전달된 녹음 타입
+        val widgetRecordType = intent?.getStringExtra("record_type")
+
         setContent {
             VoiceDiaryTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    VoiceDiaryNavHost()
+                    VoiceDiaryNavHost(initialRecordType = widgetRecordType)
                 }
             }
         }

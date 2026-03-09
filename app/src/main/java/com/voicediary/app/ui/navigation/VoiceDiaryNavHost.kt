@@ -1,6 +1,7 @@
 package com.voicediary.app.ui.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavType
@@ -8,17 +9,28 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.voicediary.app.ui.screen.BackupScreen
 import com.voicediary.app.ui.screen.DetailScreen
 import com.voicediary.app.ui.screen.HomeScreen
 import com.voicediary.app.ui.screen.ListScreen
 import com.voicediary.app.ui.screen.RecordScreen
 import com.voicediary.app.ui.screen.RecordViewModel
 import com.voicediary.app.ui.screen.ResultScreen
+import com.voicediary.app.ui.screen.SettingsScreen
 import com.voicediary.app.ui.screen.SplashScreen
 
 @Composable
-fun VoiceDiaryNavHost() {
+fun VoiceDiaryNavHost(initialRecordType: String? = null) {
     val navController = rememberNavController()
+
+    // 위젯에서 바로 녹음 화면으로 이동
+    LaunchedEffect(initialRecordType) {
+        if (initialRecordType != null) {
+            navController.navigate(NavRoutes.record(initialRecordType)) {
+                popUpTo(NavRoutes.SPLASH) { inclusive = true }
+            }
+        }
+    }
 
     NavHost(
         navController = navController,
@@ -41,6 +53,9 @@ fun VoiceDiaryNavHost() {
                 },
                 onNavigateToList = {
                     navController.navigate(NavRoutes.LIST)
+                },
+                onNavigateToSettings = {
+                    navController.navigate(NavRoutes.SETTINGS)
                 }
             )
         }
@@ -115,6 +130,21 @@ fun VoiceDiaryNavHost() {
             val id = backStackEntry.arguments?.getLong("id") ?: 0L
             DetailScreen(
                 entryId = id,
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(NavRoutes.SETTINGS) {
+            SettingsScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToBackup = {
+                    navController.navigate(NavRoutes.BACKUP)
+                }
+            )
+        }
+
+        composable(NavRoutes.BACKUP) {
+            BackupScreen(
                 onNavigateBack = { navController.popBackStack() }
             )
         }

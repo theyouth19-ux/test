@@ -33,4 +33,10 @@ class VoiceEntryRepository @Inject constructor(
 
     fun getEntriesByDateRange(startTime: Long, endTime: Long): Flow<List<VoiceEntry>> =
         voiceEntryDao.getEntriesByDateRange(startTime, endTime)
+
+    fun searchEntries(query: String): Flow<List<VoiceEntry>> =
+        voiceEntryDao.searchEntries(query)
+
+    suspend fun getAllEntriesOnce(): List<VoiceEntry> =
+        voiceEntryDao.getAllEntriesOnce()
 }

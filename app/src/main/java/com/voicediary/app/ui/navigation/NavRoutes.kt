@@ -7,6 +7,8 @@ object NavRoutes {
     const val RESULT = "result/{type}"
     const val LIST = "list"
     const val DETAIL = "detail/{id}"
+    const val SETTINGS = "settings"
+    const val BACKUP = "backup"
 
     fun record(type: String): String = "record/$type"
     fun result(type: String): String = "result/$type"

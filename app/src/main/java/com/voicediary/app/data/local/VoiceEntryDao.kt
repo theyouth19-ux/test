@@ -34,4 +34,10 @@ interface VoiceEntryDao {
 
     @Query("SELECT * FROM voice_entries WHERE created_at BETWEEN :startTime AND :endTime ORDER BY created_at DESC")
     fun getEntriesByDateRange(startTime: Long, endTime: Long): Flow<List<VoiceEntry>>
+
+    @Query("SELECT * FROM voice_entries WHERE corrected_text LIKE '%' || :query || '%' ORDER BY created_at DESC")
+    fun searchEntries(query: String): Flow<List<VoiceEntry>>
+
+    @Query("SELECT * FROM voice_entries ORDER BY created_at DESC")
+    suspend fun getAllEntriesOnce(): List<VoiceEntry>
 }

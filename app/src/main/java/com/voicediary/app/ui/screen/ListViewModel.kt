@@ -6,9 +6,12 @@ import com.voicediary.app.data.local.VoiceEntry
 import com.voicediary.app.data.repository.VoiceEntryRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -21,7 +24,7 @@ enum class ListFilter(val label: String) {
     UNREVIEWED("검토전만")
 }
 
-@OptIn(ExperimentalCoroutinesApi::class)
+@OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 @HiltViewModel
 class ListViewModel @Inject constructor(
     private val repository: VoiceEntryRepository
@@ -30,8 +33,18 @@ class ListViewModel @Inject constructor(
     private val _currentFilter = MutableStateFlow(ListFilter.ALL)
     val currentFilter: StateFlow<ListFilter> = _currentFilter
 
-    val entries: StateFlow<List<VoiceEntry>> = _currentFilter
-        .flatMapLatest { filter ->
+    private val _searchQuery = MutableStateFlow("")
+    val searchQuery: StateFlow<String> = _searchQuery
+
+    val entries: StateFlow<List<VoiceEntry>> = combine(
+        _currentFilter,
+        _searchQuery.debounce(300)
+    ) { filter, query ->
+        Pair(filter, query)
+    }.flatMapLatest { (filter, query) ->
+        if (query.isNotBlank()) {
+            repository.searchEntries(query)
+        } else {
             when (filter) {
                 ListFilter.ALL -> repository.getAllEntries()
                 ListFilter.DIARY -> repository.getEntriesByType("diary")
@@ -39,14 +52,18 @@ class ListViewModel @Inject constructor(
                 ListFilter.UNREVIEWED -> repository.getEntriesByReviewStatus("unreviewed")
             }
         }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5_000),
-            initialValue = emptyList()
-        )
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = emptyList()
+    )
 
     fun setFilter(filter: ListFilter) {
         _currentFilter.value = filter
+    }
+
+    fun setSearchQuery(query: String) {
+        _searchQuery.value = query
     }
 
     fun deleteEntry(entry: VoiceEntry) {
